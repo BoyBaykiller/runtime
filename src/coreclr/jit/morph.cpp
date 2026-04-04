@@ -7897,16 +7897,28 @@ DONE_MORPHING_CHILDREN:
                     // node ends up feeding directly into a cast, for example in
                     // GT_CAST<ubyte>(GT_SUB(0, s_1.ubyte))
 
-                    if (op1->IsIntegralConst(0))
                     {
-                        tree->ChangeOper(GT_NEG);
-                        tree->gtType = genActualType(op2->TypeGet());
+                        if (op1->IsIntegralConst(0))
+                        {
+                            tree->ChangeOper(GT_NEG);
+                            tree->gtType = genActualType(op2->TypeGet());
 
-                        tree->AsOp()->gtOp1 = op2;
-                        tree->AsOp()->gtOp2 = nullptr;
+                            tree->AsOp()->gtOp1 = op2;
+                            tree->AsOp()->gtOp2 = nullptr;
 
-                        DEBUG_DESTROY_NODE(op1);
-                        return tree;
+                            DEBUG_DESTROY_NODE(op1);
+                            return tree;
+                        }
+
+                        // Fold e.g "UINT64_MAX - x" -> "xor x, UINT64_MAX"
+                        bool isLong = op2->TypeGet() == TYP_LONG;
+                        if (op1->IsIntegralConst(-1) || op1->IsIntegralConst(isLong ? INT64_MAX : INT32_MAX))
+                        {
+                            tree->ChangeOper(GT_XOR);
+                            tree->AsOp()->gtOp1 = op2;
+                            tree->AsOp()->gtOp2 = op1;
+                            return fgMorphSmpOp(tree, mac);
+                        }
                     }
 
                     tree->AsOp()->gtOp2 = op2 = gtNewOperNode(GT_NEG, genActualType(op2->TypeGet()), op2);
