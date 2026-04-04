@@ -727,6 +727,7 @@ Range RangeCheck::GetRangeFromAssertions(Compiler* comp, ValueNum num, ASSERT_VA
             case VNF_SUB:
             case VNF_AND:
             case VNF_OR:
+            case VNF_XOR:
             case VNF_RSH:
             case VNF_RSZ:
             case VNF_UMOD:
@@ -751,6 +752,9 @@ Range RangeCheck::GetRangeFromAssertions(Compiler* comp, ValueNum num, ASSERT_VA
                         break;
                     case VNF_OR:
                         binOpResult = RangeOps::Or(r1, r2);
+                        break;
+                    case VNF_XOR:
+                        binOpResult = RangeOps::Xor(r1, r2);
                         break;
                     case VNF_LSH:
                         binOpResult = RangeOps::ShiftLeft(r1, r2);
@@ -1470,7 +1474,7 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
 {
     assert(binop->OperIs(GT_ADD, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
 
-    // For XOR we only care about Log2 pattern for now
+    // Special handling of Log2 pattern for now instead of relying on general RangeOps
     if (binop->OperIs(GT_XOR))
     {
         int upperBound;
@@ -1479,7 +1483,6 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
             assert(upperBound > 0);
             return Range(Limit(Limit::keConstant, 0), Limit(Limit::keConstant, upperBound));
         }
-        return Range(Limit(Limit::keUnknown));
     }
 
     GenTree* op1 = binop->gtGetOp1();
@@ -1548,6 +1551,9 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
             break;
         case GT_OR:
             r = RangeOps::Or(op1Range, op2Range);
+            break;
+        case GT_XOR:
+            r = RangeOps::Xor(op1Range, op2Range);
             break;
         case GT_UMOD:
             r = RangeOps::UnsignedMod(op1Range, op2Range);

@@ -479,6 +479,35 @@ struct RangeOps
         return Range(Limit(Limit::keUnknown));
     }
 
+    static Range Xor(const Range& r1, const Range& r2)
+    {
+        int  r1ConstVal;
+        int  r2ConstVal;
+        bool r1IsConstVal = r1.IsSingleValueConstant(&r1ConstVal);
+        bool r2IsConstVal = r2.IsSingleValueConstant(&r2ConstVal);
+
+        // Both ranges are single constant values.
+        // Example: [5..5] ^ [3..3] = [6..6]
+        if (r1IsConstVal && r2IsConstVal)
+        {
+            return Range(Limit(Limit::keConstant, r1ConstVal ^ r2ConstVal));
+        }
+
+        // x ^ -1      is equivalent to -1 - x
+        // x ^ INT_MAX is equivalent to INT_MAX - x
+        // Example: [3..5] ^ [-1..-1] = [-6..-4]
+        if (r1IsConstVal && (r1ConstVal == -1 || r1ConstVal == INT_MAX))
+        {
+            return Subtract(r1, r2);
+        }
+        if (r2IsConstVal && (r2ConstVal == -1 || r2ConstVal == INT_MAX))
+        {
+            return Subtract(r2, r1);
+        }
+        
+        return Range(Limit(Limit::keUnknown));
+    }
+
     static Range UnsignedMod(const Range& r1, const Range& r2)
     {
         // For X UMOD Y we only handle the case when Y is a fixed positive constant.
