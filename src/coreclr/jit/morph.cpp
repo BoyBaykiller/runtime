@@ -7910,9 +7910,10 @@ DONE_MORPHING_CHILDREN:
                             return tree;
                         }
 
-                        // Fold e.g "UINT64_MAX - x" -> "xor x, UINT64_MAX"
+                        // Fold e.g "UINT32_MAX - x" -> "xor x, UINT32_MAX"
                         bool isLong = op2->TypeGet() == TYP_LONG;
-                        if (op1->IsIntegralConst(-1) || op1->IsIntegralConst(isLong ? INT64_MAX : INT32_MAX))
+                        INT64 value = op1->AsIntConCommon()->IntegralValue();
+                        if (value == -1 || value == (isLong ? INT64_MAX : INT32_MAX))
                         {
                             tree->ChangeOper(GT_XOR);
                             std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
