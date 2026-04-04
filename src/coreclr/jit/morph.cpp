@@ -7915,8 +7915,7 @@ DONE_MORPHING_CHILDREN:
                         if (op1->IsIntegralConst(-1) || op1->IsIntegralConst(isLong ? INT64_MAX : INT32_MAX))
                         {
                             tree->ChangeOper(GT_XOR);
-                            tree->AsOp()->gtOp1 = op2;
-                            tree->AsOp()->gtOp2 = op1;
+                            std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
                             return fgMorphSmpOp(tree, mac);
                         }
                     }
