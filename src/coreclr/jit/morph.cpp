@@ -7896,29 +7896,16 @@ DONE_MORPHING_CHILDREN:
                     // Otherwise we may sign-extend incorrectly in cases where the GT_NEG
                     // node ends up feeding directly into a cast, for example in
                     // GT_CAST<ubyte>(GT_SUB(0, s_1.ubyte))
-
+                    if (op1->IsIntegralConst(0))
                     {
-                        if (op1->IsIntegralConst(0))
-                        {
-                            tree->ChangeOper(GT_NEG);
-                            tree->gtType = genActualType(op2->TypeGet());
+                        tree->ChangeOper(GT_NEG);
+                        tree->gtType = genActualType(op2->TypeGet());
 
-                            tree->AsOp()->gtOp1 = op2;
-                            tree->AsOp()->gtOp2 = nullptr;
+                        tree->AsOp()->gtOp1 = op2;
+                        tree->AsOp()->gtOp2 = nullptr;
 
-                            DEBUG_DESTROY_NODE(op1);
-                            return tree;
-                        }
-
-                        // Fold e.g "UINT32_MAX - x" -> "xor x, UINT32_MAX"
-                        bool isLong = op2->TypeGet() == TYP_LONG;
-                        INT64 value = op1->AsIntConCommon()->IntegralValue();
-                        if (value == -1 || value == (isLong ? INT64_MAX : INT32_MAX))
-                        {
-                            tree->ChangeOper(GT_XOR);
-                            std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
-                            return fgMorphSmpOp(tree, mac);
-                        }
+                        DEBUG_DESTROY_NODE(op1);
+                        return tree;
                     }
 
                     tree->AsOp()->gtOp2 = op2 = gtNewOperNode(GT_NEG, genActualType(op2->TypeGet()), op2);
@@ -10436,19 +10423,53 @@ GenTree* Compiler::fgOptimizeAddition(GenTreeOp* add)
             }
         }
 
-        // - a + b = > b - a
-        // ADD(NEG(a), b) => SUB(b, a)
-
-        // Do not do this if "op2" is constant for canonicalization purposes.
-        if (op1->OperIs(GT_NEG) && !op2->OperIs(GT_NEG) && !op2->IsIntegralConst() && gtCanSwapOrder(op1, op2))
+        if (op1->OperIs(GT_NEG) && !op2->OperIs(GT_NEG))
         {
-            add->SetOper(GT_SUB);
-            add->gtOp1 = op2;
-            add->gtOp2 = op1->AsOp()->gtGetOp1();
+            if (op2->IsIntegralConst())
+            {
+                // ADD(NEG(x), CONST) => XOR(x, CONST)
 
-            DEBUG_DESTROY_NODE(op1);
+                auto isSubToXorValid = [=](uint64_t cns, IntegralRange range) {
+                    // cns - x, where x in [lo, hi]
+                    uint64_t lo = IntegralRange::SymbolicToRealValue(range.GetLowerBound());
+                    uint64_t hi = IntegralRange::SymbolicToRealValue(range.GetUpperBound());
 
-            return add;
+                    // This mask is a OR of all numbers in [lo, hi]
+                    uint64_t mask = UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi);
+                    mask          = lo | mask;
+
+                    // Borrowing is never performed on MSB (instead overflow occurs), so
+                    // we can allow it to be 0. This handles cases like int.MaxValue - x
+                    uint32_t sizeInBits = genTypeSize(add->TypeGet()) * BITS_PER_BYTE;
+                    mask &= (1ULL << (sizeInBits - 1)) - 1;
+
+                    // At every bit pos with a 1 in mask, cns also needs 1.
+                    // Otherwise borrowing occurs and XOR is not equivalent to SUB
+                    return (cns & mask) == mask;
+                };
+
+                IntegralRange range = IntegralRange::ForNode(op1->gtGetOp1(), this);
+                uint64_t      cns   = (uint64_t)op2->AsIntConCommon()->IntegralValue();
+                if (isSubToXorValid(cns, range))
+                {
+                    add->ChangeOper(GT_XOR);
+                    add->gtOp1 = op1->gtGetOp1();
+                    return fgMorphTree(add);
+                }
+            }
+
+            // - a + b => b - a
+            // ADD(NEG(a), b) => SUB(b, a)
+            // Do not do this if "op2" is constant for canonicalization purposes.
+            if (!op2->IsIntegralConst() && gtCanSwapOrder(op1, op2))
+            {
+                add->SetOper(GT_SUB);
+                add->gtOp1 = op2;
+                add->gtOp2 = op1->AsOp()->gtGetOp1();
+
+                DEBUG_DESTROY_NODE(op1);
+                return add;
+            }
         }
 
         // a + -b = > a - b
