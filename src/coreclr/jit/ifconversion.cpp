@@ -79,10 +79,10 @@ bool OptIfConversionDsc::IfConvertCheck()
     }
 
     if (!IfConvertCheckStmts(m_startBlock->GetFalseTarget(), &m_thenOperation))
-    {        
+    {
         return false;
     }
-    
+
     m_mainOper = m_thenOperation.node->OperGet();
     assert(m_mainOper == GT_RETURN || m_mainOper == GT_STORE_LCL_VAR);
 
@@ -386,7 +386,7 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
     {
         return false;
     }
-    
+
     m_cond = last->gtGetOp1();
     assert(m_cond->OperIsCompare());
 
