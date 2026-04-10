@@ -10435,7 +10435,7 @@ GenTree* Compiler::fgOptimizeAddition(GenTreeOp* add)
                     uint64_t hi = IntegralRange::SymbolicToRealValue(range.GetUpperBound());
 
                     // This mask is a OR of all numbers in [lo, hi]
-                    uint64_t mask = UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi);
+                    uint64_t mask = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
                     mask          = lo | mask;
 
                     // Borrowing is never performed on MSB (instead overflow occurs), so
