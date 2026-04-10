@@ -493,18 +493,37 @@ struct RangeOps
             return Range(Limit(Limit::keConstant, r1ConstVal ^ r2ConstVal));
         }
 
+        auto isSubToXorValid = [=](uint64_t cns, Range range) {
+            // cns - x, where x in [lo, hi]
+            uint64_t lo = (int64_t)range.LowerLimit().GetConstant();
+            uint64_t hi = (int64_t)range.UpperLimit().GetConstant();
+
+            // This mask is a OR of all numbers in [lo, hi]
+            uint64_t mask = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
+            mask          = lo | mask;
+
+            // Borrowing is never performed on MSB (instead overflow occurs), so
+            // we can allow it to be 0. This handles cases like int.MaxValue - x
+            uint32_t sizeInBits = genTypeSize(TYP_INT) * BITS_PER_BYTE;
+            mask &= (1ULL << (sizeInBits - 1)) - 1;
+
+            // At every bit pos with a 1 in mask, cns also needs 1.
+            // Otherwise borrowing occurs and XOR is not equivalent to SUB
+            return (cns & mask) == mask;
+        };
+
         // x ^ -1      is equivalent to -1 - x
         // x ^ INT_MAX is equivalent to INT_MAX - x
         // Example: [3..5] ^ [-1..-1] = [-6..-4]
-        if (r1IsConstVal && (r1ConstVal == -1 || r1ConstVal == INT_MAX))
+        if (r1IsConstVal && r2.IsConstantRange() && isSubToXorValid(r1ConstVal, r2))
         {
             return Subtract(r1, r2);
         }
-        if (r2IsConstVal && (r2ConstVal == -1 || r2ConstVal == INT_MAX))
+        if (r2IsConstVal && r1.IsConstantRange() && isSubToXorValid(r2ConstVal, r1))
         {
             return Subtract(r2, r1);
         }
-        
+
         return Range(Limit(Limit::keUnknown));
     }
 
@@ -688,6 +707,12 @@ struct RangeOps
         result.lLimit = Limit(Limit::keConstant, -hi);
         result.uLimit = Limit(Limit::keConstant, -lo);
         return result;
+    }
+
+    static Range Not(const Range& range)
+    {
+        Range cns = Limit(Limit::keConstant, -1);
+        return Subtract(cns, range);
     }
 
     //------------------------------------------------------------------------
