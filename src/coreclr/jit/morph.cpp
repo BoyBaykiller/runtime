@@ -10434,25 +10434,24 @@ GenTree* Compiler::fgOptimizeAddition(GenTreeOp* add)
                     uint64_t lo = IntegralRange::SymbolicToRealValue(range.GetLowerBound());
                     uint64_t hi = IntegralRange::SymbolicToRealValue(range.GetUpperBound());
 
-                    // This mask is a OR of all numbers in [lo, hi]
-                    uint64_t mask = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
-                    mask          = lo | mask;
+                    // OR of all numbers in [lo, hi]
+                    uint64_t knownBits = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
+                    knownBits          = lo | knownBits;
 
-                    // Borrowing is never performed on MSB (instead overflow occurs), so
-                    // we can allow it to be 0. This handles cases like int.MaxValue - x
+                    // Zero out bits outside of TYPE. This handles cases that rely on overflow
                     uint32_t sizeInBits = genTypeSize(add->TypeGet()) * BITS_PER_BYTE;
-                    mask &= (1ULL << (sizeInBits - 1)) - 1;
+                    knownBits &= (1ULL << (sizeInBits - 1)) - 1;
 
-                    // At every bit pos with a 1 in mask, cns also needs 1.
+                    // At every bit pos with a 1 in knownBits, cns also needs 1.
                     // Otherwise borrowing occurs and XOR is not equivalent to SUB
-                    return (cns & mask) == mask;
+                    return (cns & knownBits) == knownBits;
                 };
 
                 IntegralRange range = IntegralRange::ForNode(op1->gtGetOp1(), this);
                 uint64_t      cns   = (uint64_t)op2->AsIntConCommon()->IntegralValue();
                 if (isSubToXorValid(cns, range))
                 {
-                    add->ChangeOper(GT_XOR);
+                    add->SetOper(GT_XOR, GenTree::PRESERVE_VN);
                     add->gtOp1 = op1->gtGetOp1();
                     return fgMorphTree(add);
                 }
