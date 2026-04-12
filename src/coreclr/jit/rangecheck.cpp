@@ -1901,13 +1901,8 @@ bool RangeCheck::ComputeDoesOverflow(BasicBlock* block, GenTree* expr, const Ran
         overflows = DoesBinOpOverflow(block, expr->AsOp(), range);
     }
     // These operators don't overflow.
-    else if (expr->OperIs(GT_AND, GT_RSH, GT_RSZ, GT_UMOD, GT_NEG))
+    else if (expr->OperIs(GT_AND, GT_RSH, GT_RSZ, GT_UMOD, GT_NEG, GT_XOR, GT_NOT))
     {
-        overflows = false;
-    }
-    else if (expr->OperIs(GT_XOR) && vnStore->IsVNLog2(m_compiler->vnStore->VNConservativeNormalValue(expr->gtVNPair)))
-    {
-        // For XOR we only care about Log2 pattern for now, which never overflows.
         overflows = false;
     }
     // Walk through phi arguments to check if phi arguments involve arithmetic that overflows.
@@ -2006,6 +2001,12 @@ Range RangeCheck::ComputeRange(BasicBlock* block, GenTree* expr, bool monIncreas
         // Compute range for negation, e.g.: [0..8] -> [-8..0]
         Range op1Range = GetRangeWorker(block, expr->gtGetOp1(), monIncreasing DEBUGARG(indent + 1));
         range          = RangeOps::Negate(op1Range);
+    }
+    else if (expr->OperIs(GT_NOT))
+    {
+        // Compute range for not, e.g: [2, 8] -> [-9..-3]
+        Range op1Range = GetRangeWorker(block, expr->gtGetOp1(), monIncreasing DEBUGARG(indent + 1));
+        range          = RangeOps::Not(op1Range);
     }
     // If phi, then compute the range for arguments, calling the result "dependent" when looping begins.
     else if (expr->OperIs(GT_PHI))

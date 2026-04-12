@@ -512,8 +512,6 @@ struct RangeOps
             return (cns & mask) == mask;
         };
 
-        // x ^ -1      is equivalent to -1 - x
-        // x ^ INT_MAX is equivalent to INT_MAX - x
         // Example: [3..5] ^ [-1..-1] = [-6..-4]
         if (r1IsConstVal && r2.IsConstantRange() && isSubToXorValid(r1ConstVal, r2))
         {
