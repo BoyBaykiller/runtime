@@ -3966,6 +3966,11 @@ void Compiler::fgDebugCheckStmtsList(BasicBlock* block, bool morphTrees)
             noway_assert(block->lastStmt() == stmt);
         }
 
+        // For each statement check that the exception flags are properly set
+        noway_assert(stmt->GetRootNode());
+        fgDebugCheckFlags(stmt->GetRootNode(), block);
+        fgDebugCheckTypes(stmt->GetRootNode());
+
         // Block that isn't BBJ_RETURN should not contain GT_RETURN node.
         if (!block->KindIs(BBJ_RETURN))
         {
@@ -3981,13 +3986,6 @@ void Compiler::fgDebugCheckStmtsList(BasicBlock* block, bool morphTrees)
             bool     isNotLastStmt = stmt->GetNextStmt() != nullptr;
             assert(!(isReturn && isNotLastStmt) && "GT_RETURN node found that is not the last statement in the block");
         }
-
-        // For each statement check that the exception flags are properly set
-
-        noway_assert(stmt->GetRootNode());
-
-        fgDebugCheckFlags(stmt->GetRootNode(), block);
-        fgDebugCheckTypes(stmt->GetRootNode());
 
         // Not only will this stress fgMorphBlockStmt(), but we also get all the checks
         // done by fgMorphTree()
