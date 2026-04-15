@@ -10298,7 +10298,7 @@ GenTree* Compiler::fgOptimizeDistributiveArithemtic(GenTreeOp* tree)
         return tree;
     }
 
-    if (((tree->gtFlags & GTF_PERSISTENT_SIDE_EFFECTS) != 0) || ((tree->gtFlags & GTF_ORDER_SIDEEFF) != 0))
+    if ((tree->gtFlags & (GTF_PERSISTENT_SIDE_EFFECTS | GTF_ORDER_SIDEEFF)) != 0)
     {
         return tree;
     }
