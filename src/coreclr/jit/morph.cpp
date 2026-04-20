@@ -7862,7 +7862,7 @@ DONE_MORPHING_CHILDREN:
                 goto CM_OVF_OP;
             }
 
-            // TODO: Call fgOptimizeDistributiveArithemtic + fgOptimizeCommutativeArithmetic
+            // TODO: Call fgOptimizeDistributiveArithmetic + fgOptimizeCommutativeArithmetic
 
             if (!fgGlobalMorph)
             {
@@ -8072,7 +8072,7 @@ DONE_MORPHING_CHILDREN:
         case GT_AND:
             if (oper != GT_MUL)
             {
-                tree = fgOptimizeDistributiveArithemtic(tree->AsOp());
+                tree = fgOptimizeDistributiveArithmetic(tree->AsOp());
             }
             tree = fgOptimizeCommutativeArithmetic(tree->AsOp());
             if (!tree->OperIsSimple())
@@ -10275,7 +10275,7 @@ GenTree* Compiler::fgOptimizeHWIntrinsicAssociative(GenTreeHWIntrinsic* tree)
 #endif // FEATURE_HW_INTRINSICS
 
 //------------------------------------------------------------------------
-// fgOptimizeDistributiveArithemtic: Optimizes distributive arithemtic.
+// fgOptimizeDistributiveArithmetic: Optimizes distributive Arithmetic.
 //
 // Arguments:
 //   tree - the unchecked GT_AND/GT_OR/GT_XOR/GT_ADD/GT_SUB tree to optimize.
@@ -10283,7 +10283,7 @@ GenTree* Compiler::fgOptimizeHWIntrinsicAssociative(GenTreeHWIntrinsic* tree)
 // Return Value:
 //   The unchanged tree or optimized tree with oper GT_MUL/GT_OR/GT_AND.
 //
-GenTree* Compiler::fgOptimizeDistributiveArithemtic(GenTreeOp* tree)
+GenTree* Compiler::fgOptimizeDistributiveArithmetic(GenTreeOp* tree)
 {
     assert(tree->OperIs(GT_AND, GT_OR, GT_XOR, GT_ADD, GT_SUB));
     assert(!tree->gtOverflowEx());
@@ -10341,7 +10341,7 @@ GenTree* Compiler::fgOptimizeDistributiveArithemtic(GenTreeOp* tree)
 }
 
 //------------------------------------------------------------------------
-// fgOptimizeCommutativeArithmetic: Optimizes commutative arithemtic.
+// fgOptimizeCommutativeArithmetic: Optimizes commutative Arithmetic.
 //
 // Arguments:
 //   tree - the unchecked GT_ADD/GT_MUL/GT_OR/GT_XOR/GT_AND tree to optimize.
