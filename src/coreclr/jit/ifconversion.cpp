@@ -60,9 +60,8 @@ private:
 
     bool HasElseBlock()
     {
-        // If the true target has a unique pred then we have an Else block.
-        // Note: Even when this is false we can have an elseOperation by
-        // treating a STORE inside the JTRUE block as one
+        // Note: Even when this is false we can have an Else operation
+        // by treating a STORE inside JTRUE block as one
         return m_startBlock->GetTrueTarget()->GetUniquePred(m_compiler) != nullptr;
     }
 
@@ -104,9 +103,9 @@ bool OptIfConversionDsc::IfConvertCheck()
     }
     else
     {
-        // There is no Else block, however we may still be able to get a Else operation.
-        // Look for previous store to the local and see if we can forward substitute
-        // it's definition to the SELECT (which will be last stmt in block).
+        // There is no Else block, but we can still find an Else operation. Search for
+        // most recent STORE to the local in JTRUE block and see if it's legal to fwd sub
+        // it's definition into the SELECT and remove the STORE.
 
         assert(m_mainOper == GT_STORE_LCL_VAR);
 
@@ -477,7 +476,7 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
         {
             thenCost = m_thenOperation.node->AsLclVar()->Data()->GetCostEx() +
                        (m_compiler->gtIsLikelyRegVar(m_thenOperation.node) ? 0 : 2);
-            if (m_elseOperation.block != nullptr)
+            if (HasElseBlock())
             {
                 elseCost = m_elseOperation.node->AsLclVar()->Data()->GetCostEx() +
                            (m_compiler->gtIsLikelyRegVar(m_elseOperation.node) ? 0 : 2);
@@ -486,11 +485,9 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
         else
         {
             assert(m_mainOper == GT_RETURN);
+            assert(HasElseBlock());
             thenCost = m_thenOperation.node->AsOp()->GetReturnValue()->GetCostEx();
-            if (m_elseOperation.block != nullptr)
-            {
-                elseCost = m_elseOperation.node->AsOp()->GetReturnValue()->GetCostEx();
-            }
+            elseCost = m_elseOperation.node->AsOp()->GetReturnValue()->GetCostEx();
         }
 
         // Cost to allow for "x = cond ? a + b : c + d".
