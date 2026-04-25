@@ -105,7 +105,7 @@ bool OptIfConversionDsc::IfConvertCheck()
     {
         // There is no Else block, but we can still find an Else operation. Search for
         // most recent STORE to the local in JTRUE block and see if it's legal to fwd sub
-        // it's definition into the SELECT and remove the STORE.
+        // its definition into the SELECT and remove the STORE.
 
         assert(m_mainOper == GT_STORE_LCL_VAR);
 
@@ -588,7 +588,7 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
     BasicBlock* falseBb = m_startBlock->GetFalseTarget();
     BasicBlock* trueBb  = m_startBlock->GetTrueTarget();
 
-    // JTRUE block now contains SELECT. Change it's kind and make it flow
+    // JTRUE block now contains SELECT. Change its kind and make it flow
     // directly into block where flows merge, which is null in case of GT_RETURN.
     bool hasElseBlock = HasElseBlock();
     if (m_mainOper == GT_RETURN)
