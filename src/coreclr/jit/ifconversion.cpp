@@ -101,48 +101,40 @@ bool OptIfConversionDsc::IfConvertCheck()
             return false;
         }
     }
-    else
+    else if (m_startBlock->StatementCount() > 1)
     {
-        // There is no Else block, but we can still find an Else operation. Search for
-        // most recent STORE to the local in JTRUE block and see if it's legal to fwd sub
-        // its definition into the SELECT and remove the STORE.
-
         assert(m_mainOper == GT_STORE_LCL_VAR);
+
+        // There is no Else block, but we can still find an Else operation. Look for
+        // a STORE to the local in the JTRUE block and see if we can fwd sub its
+        // definition into the SELECT and remove the STORE.
+        // For now only check immediate predecessor stmt of JTRUE.
 
         GenTreeLclVar* thenStore    = m_thenOperation.node->AsLclVar();
         unsigned       targetLclNum = thenStore->GetLclNum();
 
-        bool usedInThenBlock = m_compiler->gtHasRef(thenStore->Data(), targetLclNum);
-        if (!usedInThenBlock)
-        {
-            Statement* last = m_startBlock->lastStmt();
-            Statement* stmt = last;
-            do
-            {
-                GenTree* tree = stmt->GetRootNode();
-                if (tree->OperIs(GT_STORE_LCL_VAR))
-                {
-                    GenTreeLclVar* prevStore = tree->AsLclVar();
-                    if (prevStore->GetLclNum() == targetLclNum)
-                    {
-                        if (prevStore->Data()->IsInvariant())
-                        {
-                            m_elseOperation.block = m_startBlock;
-                            m_elseOperation.stmt  = stmt;
-                            m_elseOperation.node  = tree;
-                        }
+        bool unusedInThen = !m_compiler->gtTreeHasLocalRead(thenStore->Data(), targetLclNum);
+        bool unusedInCond =
+            ((m_cond->gtFlags & GTF_SIDE_EFFECT) == 0) && !m_compiler->gtTreeHasLocalRead(m_cond, targetLclNum);
 
-                        break;
+        if (unusedInThen && unusedInCond)
+        {
+            Statement* stmt = m_startBlock->lastStmt()->GetPrevStmt();
+            GenTree*   tree = stmt->GetRootNode();
+
+            if (tree->OperIs(GT_STORE_LCL_VAR))
+            {
+                GenTreeLclVar* prevStore = tree->AsLclVar();
+                if (prevStore->GetLclNum() == targetLclNum)
+                {
+                    if (prevStore->Data()->IsInvariant())
+                    {
+                        m_elseOperation.block = m_startBlock;
+                        m_elseOperation.stmt  = stmt;
+                        m_elseOperation.node  = tree;
                     }
                 }
-
-                if (m_compiler->gtHasRef(tree, targetLclNum))
-                {
-                    break;
-                }
-
-                stmt = stmt->GetPrevStmt();
-            } while (stmt != last);
+            }
         }
     }
 
