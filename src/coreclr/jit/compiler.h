@@ -3904,6 +3904,7 @@ public:
 
     GenTree* gtFoldExpr(GenTree* tree);
     GenTree* gtFoldExprConst(GenTree* tree);
+    GenTree* gtFoldDistributiveArithmetic(GenTree* tree);
     GenTree* gtFoldIndirConst(GenTreeIndir* indir);
     GenTree* gtFoldExprSpecial(GenTree* tree);
     GenTree* gtFoldExprSpecialFloating(GenTree* tree);
@@ -6901,8 +6902,6 @@ private:
 public:
     GenTree* fgMorphInitBlock(GenTree* tree);
     GenTree* fgMorphCopyBlock(GenTree* tree);
-
-    GenTree* fgOptimizeDistributiveArithmetic(GenTreeOp* tree);
 private:
     GenTree* fgMorphSmpOp(GenTree* tree, MorphAddrContext* mac, bool* optAssertionPropDone = nullptr);
     bool fgTryReplaceStructLocalWithFields(GenTree** use);
