@@ -267,7 +267,7 @@ bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenSt
         return false;
     }
 
-    int        stmtSearchBudget = 2;
+    int        stmtSearchBudget = 8;
     bool       hasEhSuccs       = m_startBlock->HasPotentialEHSuccs(m_compiler);
     Statement* last             = m_startBlock->lastStmt();
     Statement* stmt             = last;
