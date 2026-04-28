@@ -50,6 +50,7 @@ private:
     bool IfConvertCheck();
     bool IfConvertCheckFlow();
     bool IfConvertCheckStmts(BasicBlock* block, IfConvertOperation* foundOperation);
+    bool IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenStore, IfConvertOperation* foundOperation);
 
     GenTree* TryTransformSelectOperOrLocal(GenTree* oper, GenTree* lcl);
     GenTree* TryTransformSelectOperOrZero(GenTree* oper, GenTree* lcl);
@@ -105,37 +106,7 @@ bool OptIfConversionDsc::IfConvertCheck()
     {
         assert(m_mainOper == GT_STORE_LCL_VAR);
 
-        // There is no Else block, but we can still find an Else operation. Look for
-        // a STORE to the local in the JTRUE block and see if we can fwd sub its
-        // definition into the SELECT and remove the STORE.
-        // For now only check immediate predecessor stmt of JTRUE.
-
-        GenTreeLclVar* thenStore    = m_thenOperation.node->AsLclVar();
-        unsigned       targetLclNum = thenStore->GetLclNum();
-
-        bool unusedInThen = !m_compiler->gtTreeHasLocalRead(thenStore->Data(), targetLclNum);
-        bool unusedInCond =
-            ((m_cond->gtFlags & GTF_SIDE_EFFECT) == 0) && !m_compiler->gtTreeHasLocalRead(m_cond, targetLclNum);
-
-        if (unusedInThen && unusedInCond)
-        {
-            Statement* stmt = m_startBlock->lastStmt()->GetPrevStmt();
-            GenTree*   tree = stmt->GetRootNode();
-
-            if (tree->OperIs(GT_STORE_LCL_VAR))
-            {
-                GenTreeLclVar* prevStore = tree->AsLclVar();
-                if (prevStore->GetLclNum() == targetLclNum)
-                {
-                    if (prevStore->Data()->IsInvariant())
-                    {
-                        m_elseOperation.block = m_startBlock;
-                        m_elseOperation.stmt  = stmt;
-                        m_elseOperation.node  = tree;
-                    }
-                }
-            }
-        }
+        IfConvertTryGetElseFromJtrueBlock(m_thenOperation.node->AsLclVar(), &m_elseOperation);
     }
 
     if (m_elseOperation.block != nullptr)
@@ -200,7 +171,7 @@ bool OptIfConversionDsc::IfConvertCheckFlow()
 //   foundOperation - The found operation
 //
 // Returns:
-//   True if the statements are valid for an If conversion. In that case foundOperation is also set.
+//   True if the statements are valid for an If conversion. In which case foundOperation is set.
 //
 bool OptIfConversionDsc::IfConvertCheckStmts(BasicBlock* block, IfConvertOperation* foundOperation)
 {
@@ -263,6 +234,78 @@ bool OptIfConversionDsc::IfConvertCheckStmts(BasicBlock* block, IfConvertOperati
     }
 
     return found;
+}
+
+//-----------------------------------------------------------------------------
+// IfConvertTryGetElseFromJtrueBlock
+//
+// Look for a STORE to the same local that thenStore targets and
+// see if we can safely move it to after JTRUE and thenStore stmts.
+// If so it is effectively the Else operation. Assumes there is no Else block.
+//
+// Arguments:
+//   thenStore      - The existing store inside the Then block
+//   foundOperation - The found operation
+//
+// Returns:
+//   True if a corresponding Else operation was found. In which case foundOperation is set.
+//
+bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenStore, IfConvertOperation* foundOperation)
+{
+    assert(!HasElseBlock());
+
+    unsigned targetLclNum = thenStore->GetLclNum();
+
+    if (m_compiler->lvaGetDesc(targetLclNum)->IsAddressExposed())
+    {
+        return false;
+    }
+
+    assert((thenStore->Data()->gtFlags & GTF_SIDE_EFFECT) == 0);
+    if (m_compiler->gtTreeHasLocalRead(thenStore->Data(), targetLclNum))
+    {
+        return false;
+    }
+
+    int        stmtSearchBudget = 2;
+    Statement* last             = m_startBlock->lastStmt();
+    Statement* stmt             = last;
+    do
+    {
+        if (stmtSearchBudget-- <= 0)
+        {
+            break;
+        }
+
+        GenTree* tree = stmt->GetRootNode();
+        if (tree->OperIs(GT_STORE_LCL_VAR))
+        {
+            GenTreeLclVar* prevStore = tree->AsLclVar();
+            if (prevStore->GetLclNum() == targetLclNum)
+            {
+                if (prevStore->Data()->IsInvariant())
+                {
+                    m_elseOperation.block = m_startBlock;
+                    m_elseOperation.stmt  = stmt;
+                    m_elseOperation.node  = tree;
+
+                    return true;
+                }
+
+                // We found a STORE but its def might evaluate to something else when moving
+                return false;
+            }
+        }
+
+        if (m_compiler->gtTreeHasLocalRead(tree, targetLclNum) || m_compiler->gtTreeHasLocalStore(tree, targetLclNum))
+        {
+            break;
+        }
+
+        stmt = stmt->GetPrevStmt();
+    } while (stmt != last);
+
+    return false;
 }
 
 //-----------------------------------------------------------------------------
