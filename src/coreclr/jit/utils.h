@@ -1023,6 +1023,8 @@ public:
     static float UInt32BitsToSingle(uint32_t value);
 
     static double UInt64BitsToDouble(uint64_t value);
+
+    static uint64_t BitsetFromRange(uint64_t lo, uint64_t hi);
 };
 
 // The CLR requires that critical section locks be initialized via its ClrCreateCriticalSection API...but

@@ -3601,6 +3601,29 @@ double BitOperations::UInt64BitsToDouble(uint64_t value)
     return result;
 }
 
+//------------------------------------------------------------------------
+// BitOperations::BitsetFromRange: Gets a bitset from OR'ing all numbers in [lo, hi]
+//
+// Arguments:
+//    lo - The range minimum.
+//    hi - The range maximum.
+//
+// Return Value:
+//    The bitset
+//
+uint64_t BitOperations::BitsetFromRange(uint64_t lo, uint64_t hi)
+{
+    if (lo == hi)
+    {
+        return lo;
+    }
+
+    uint64_t mask = UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi);
+    mask          = lo | mask;
+
+    return mask;
+}
+
 namespace MagicDivide
 {
 template <int TableBase = 0, int TableSize, typename Magic>

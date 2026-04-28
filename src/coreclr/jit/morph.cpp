@@ -10464,28 +10464,18 @@ GenTree* Compiler::fgOptimizeAddition(GenTreeOp* add)
             if (op2->IsIntegralConst())
             {
                 // ADD(NEG(x), CONST) => XOR(x, CONST)
+                uint64_t      cns       = (uint64_t)op2->AsIntConCommon()->IntegralValue();
+                IntegralRange range     = IntegralRange::ForNode(op1->gtGetOp1(), this);
+                uint64_t      lo        = IntegralRange::SymbolicToRealValue(range.GetLowerBound());
+                uint64_t      hi        = IntegralRange::SymbolicToRealValue(range.GetUpperBound());
+                uint64_t      knownBits = BitOperations::BitsetFromRange(lo, hi);
 
-                auto isSubToXorValid = [=](uint64_t cns, IntegralRange range) {
-                    // cns - x, where x in [lo, hi]
-                    uint64_t lo = IntegralRange::SymbolicToRealValue(range.GetLowerBound());
-                    uint64_t hi = IntegralRange::SymbolicToRealValue(range.GetUpperBound());
-
-                    // OR of all numbers in [lo, hi]
-                    uint64_t knownBits = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
-                    knownBits          = lo | knownBits;
-
-                    // Zero out bits outside of TYPE. This handles cases that rely on overflow
-                    uint32_t sizeInBits = genTypeSize(add->TypeGet()) * BITS_PER_BYTE;
-                    knownBits &= (1ULL << (sizeInBits - 1)) - 1;
-
-                    // At every bit pos with a 1 in knownBits, cns also needs 1.
-                    // Otherwise borrowing occurs and XOR is not equivalent to SUB
-                    return (cns & knownBits) == knownBits;
-                };
-
-                IntegralRange range = IntegralRange::ForNode(op1->gtGetOp1(), this);
-                uint64_t      cns   = (uint64_t)op2->AsIntConCommon()->IntegralValue();
-                if (isSubToXorValid(cns, range))
+                // Zero out bits outside of TYPE. This handles cases that rely on overflow (int.MaxValue - x)
+                uint32_t sizeInBits = genTypeSize(add->TypeGet()) * BITS_PER_BYTE;
+                knownBits &= (1ULL << (sizeInBits - 1)) - 1;
+                
+                bool noCarry = (cns & knownBits) == knownBits;
+                if (noCarry)
                 {
                     add->SetOper(GT_XOR, GenTree::PRESERVE_VN);
                     add->gtOp1 = op1->gtGetOp1();

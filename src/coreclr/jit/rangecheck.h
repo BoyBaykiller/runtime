@@ -494,22 +494,16 @@ struct RangeOps
         }
 
         auto isSubToXorValid = [=](uint64_t cns, Range range) {
-            // cns - x, where x in [lo, hi]
-            uint64_t lo = (int64_t)range.LowerLimit().GetConstant();
-            uint64_t hi = (int64_t)range.UpperLimit().GetConstant();
+            uint64_t lo = (uint64_t)range.LowerLimit().GetConstant();
+            uint64_t hi = (uint64_t)range.UpperLimit().GetConstant();
+            uint64_t knownBits = BitOperations::BitsetFromRange(lo, hi);
 
-            // This mask is a OR of all numbers in [lo, hi]
-            uint64_t mask = (lo == hi) ? 0 : (UINT64_MAX >> BitOperations::LeadingZeroCount(lo ^ hi));
-            mask          = lo | mask;
-
-            // Borrowing is never performed on MSB (instead overflow occurs), so
-            // we can allow it to be 0. This handles cases like int.MaxValue - x
+            // Zero out bits outside of TYPE. This handles cases that rely on overflow (int.MaxValue - x)
             uint32_t sizeInBits = genTypeSize(TYP_INT) * BITS_PER_BYTE;
-            mask &= (1ULL << (sizeInBits - 1)) - 1;
+            knownBits &= (1ULL << (sizeInBits - 1)) - 1;
 
-            // At every bit pos with a 1 in mask, cns also needs 1.
-            // Otherwise borrowing occurs and XOR is not equivalent to SUB
-            return (cns & mask) == mask;
+            // Can sub be perfomed without carry?
+            return (cns & knownBits) == knownBits;
         };
 
         // Example: [3..5] ^ [-1..-1] = [-6..-4]
