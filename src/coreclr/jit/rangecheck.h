@@ -494,8 +494,8 @@ struct RangeOps
         }
 
         auto isSubToXorValid = [=](uint64_t cns, Range range) {
-            uint64_t lo = (uint64_t)range.LowerLimit().GetConstant();
-            uint64_t hi = (uint64_t)range.UpperLimit().GetConstant();
+            uint64_t lo        = (uint64_t)range.LowerLimit().GetConstant();
+            uint64_t hi        = (uint64_t)range.UpperLimit().GetConstant();
             uint64_t knownBits = BitOperations::BitsetFromRange(lo, hi);
 
             // Zero out bits outside of TYPE. This handles cases that rely on overflow (int.MaxValue - x)

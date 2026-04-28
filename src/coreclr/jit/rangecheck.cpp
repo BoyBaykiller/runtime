@@ -1571,7 +1571,9 @@ Range RangeCheck::ComputeRangeForBinOp(BasicBlock* block, GenTreeOp* binop, bool
 {
     assert(binop->OperIs(GT_ADD, GT_OR, GT_XOR, GT_AND, GT_RSH, GT_RSZ, GT_LSH, GT_UMOD, GT_MUL));
 
-    // Special handling of Log2 pattern for now instead of relying on general RangeOps
+    // To handle the Log2 pattern of "63 ^ LZCNT(x | 1)" we are missing precise
+    // range info for "LZCNT(x | 1)" (should be [0, 63]) and 64bit support. Special case it:
+    // https://github.com/dotnet/runtime/pull/113790
     if (binop->OperIs(GT_XOR))
     {
         int upperBound;

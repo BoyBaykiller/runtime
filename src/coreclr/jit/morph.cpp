@@ -10473,7 +10473,7 @@ GenTree* Compiler::fgOptimizeAddition(GenTreeOp* add)
                 // Zero out bits outside of TYPE. This handles cases that rely on overflow (int.MaxValue - x)
                 uint32_t sizeInBits = genTypeSize(add->TypeGet()) * BITS_PER_BYTE;
                 knownBits &= (1ULL << (sizeInBits - 1)) - 1;
-                
+
                 bool noCarry = (cns & knownBits) == knownBits;
                 if (noCarry)
                 {
