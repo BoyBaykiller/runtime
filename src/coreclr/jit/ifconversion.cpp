@@ -254,11 +254,6 @@ bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenSt
 {
     assert(!HasElseBlock());
 
-    if (m_startBlock->HasPotentialEHSuccs(m_compiler))
-    {
-        return false;
-    }
-
     unsigned targetLclNum = thenStore->GetLclNum();
 
     if (m_compiler->lvaGetDesc(targetLclNum)->IsAddressExposed())
@@ -273,6 +268,7 @@ bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenSt
     }
 
     int        stmtSearchBudget = 2;
+    bool       hasEhSuccs       = m_startBlock->HasPotentialEHSuccs(m_compiler);
     Statement* last             = m_startBlock->lastStmt();
     Statement* stmt             = last;
     do
@@ -300,6 +296,11 @@ bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenSt
                 // We found a STORE but its def might evaluate to something else when moving
                 return false;
             }
+        }
+
+        if (((tree->gtFlags & GTF_EXCEPT) != 0) && hasEhSuccs)
+        {
+            break;
         }
 
         if (m_compiler->gtTreeHasLocalRead(tree, targetLclNum) || m_compiler->gtTreeHasLocalStore(tree, targetLclNum))
