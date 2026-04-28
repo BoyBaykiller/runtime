@@ -254,12 +254,14 @@ bool OptIfConversionDsc::IfConvertTryGetElseFromJtrueBlock(GenTreeLclVar* thenSt
 {
     assert(!HasElseBlock());
 
+    if (m_startBlock->HasPotentialEHSuccs(m_compiler))
+    {
+        return false;
+    }
+
     unsigned targetLclNum = thenStore->GetLclNum();
 
-    // Cannot easily reason about all uses if it is address exposed or
-    // used in EH where control could get transferred to at "any time"
-    LclVarDsc* lclVarDsc = m_compiler->lvaGetDesc(targetLclNum);
-    if (lclVarDsc->IsAddressExposed() || lclVarDsc->lvLiveInOutOfHndlr)
+    if (m_compiler->lvaGetDesc(targetLclNum)->IsAddressExposed())
     {
         return false;
     }
