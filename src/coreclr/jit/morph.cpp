@@ -7768,6 +7768,17 @@ DONE_MORPHING_CHILDREN:
 
         case GT_EQ:
         case GT_NE:
+            // Change "CNS relop op2" to "op2 relop* CNS"
+            if (op1->IsIntegralConst() && tree->OperIsCompare() && gtCanSwapOrder(op1, op2))
+            {
+                std::swap(tree->AsOp()->gtOp1, tree->AsOp()->gtOp2);
+                tree->gtOper = GenTree::SwapRelop(tree->OperGet());
+
+                oper = tree->OperGet();
+                op1  = tree->gtGetOp1();
+                op2  = tree->gtGetOp2();
+            }
+
             if (op2->IsIntegralConst())
             {
                 tree = fgOptimizeEqualityComparisonWithConst(tree->AsOp());
@@ -8806,6 +8817,17 @@ GenTree* Compiler::fgOptimizeEqualityComparisonWithConst(GenTreeOp* cmp)
 
         cmp->gtOp1 = op1;
         fgUpdateConstTreeValueNumber(op2);
+    }
+
+    // Canonicalize '(A & pow2) == pow2' -> '(A & pow2) != 0'
+    if (cmp->OperIs(GT_EQ) && op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConst())
+    {
+        if (op1->gtGetOp2()->AsIntConCommon()->IconValue() == op2->IconValue())
+        {
+            cmp->SetOper(GT_NE, GenTree::PRESERVE_VN);
+            op2->SetIntegralValue(0);
+            fgUpdateConstTreeValueNumber(op2);
+        }
     }
 
     // Here we look for the following tree
