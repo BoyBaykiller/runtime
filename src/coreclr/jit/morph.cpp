@@ -8762,10 +8762,9 @@ GenTree* Compiler::fgOptimizeEqualityComparisonWithConst(GenTreeOp* cmp)
     // Canonicalize
     // '(A & pow2) == pow2' -> '(A & pow2) != 0'
     // '(A & pow2) != pow2' -> '(A & pow2) == 0'
-    if (op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConst())
+    if (op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConst() && op2->IsIntegralConstUnsignedPow2())
     {
-        if (BitOperations::PopCount(op2->UnsignedIntegralValue()) == 1 &&
-            (op1->gtGetOp2()->AsIntConCommon()->IntegralValue() == op2->IntegralValue()))
+        if (op1->gtGetOp2()->AsIntConCommon()->IntegralValue() == op2->IntegralValue())
         {
             cmp->SetOper(cmp->OperIs(GT_EQ) ? GT_NE : GT_EQ, GenTree::PRESERVE_VN);
             op2->SetIntegralValue(0);
