@@ -8822,7 +8822,7 @@ GenTree* Compiler::fgOptimizeEqualityComparisonWithConst(GenTreeOp* cmp)
     // Canonicalize '(A & pow2) == pow2' -> '(A & pow2) != 0'
     if (cmp->OperIs(GT_EQ) && op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConstUnsignedPow2())
     {
-        if (op1->gtGetOp2()->AsIntConCommon()->IconValue() == op2->IconValue())
+        if (op1->gtGetOp2()->AsIntCon()->IconValue() == op2->IconValue())
         {
             cmp->SetOper(GT_NE, GenTree::PRESERVE_VN);
             op2->SetIntegralValue(0);
