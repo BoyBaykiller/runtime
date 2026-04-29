@@ -8759,6 +8759,20 @@ GenTree* Compiler::fgOptimizeEqualityComparisonWithConst(GenTreeOp* cmp)
     GenTree*             op1 = cmp->gtGetOp1();
     GenTreeIntConCommon* op2 = cmp->gtGetOp2()->AsIntConCommon();
 
+    // Canonicalize
+    // '(A & pow2) == pow2' -> '(A & pow2) != 0'
+    // '(A & pow2) != pow2' -> '(A & pow2) == 0'
+    if (op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConst())
+    {
+        if (BitOperations::PopCount(op2->UnsignedIntegralValue()) == 1 &&
+            (op1->gtGetOp2()->AsIntConCommon()->IntegralValue() == op2->IntegralValue()))
+        {
+            cmp->SetOper(cmp->OperIs(GT_EQ) ? GT_NE : GT_EQ, GenTree::PRESERVE_VN);
+            op2->SetIntegralValue(0);
+            fgUpdateConstTreeValueNumber(op2);
+        }
+    }
+
     // Fold: (-(x)) == 0  ->  x == 0  (avoid neg on compare-to-zero)
     if (op1->OperIs(GT_NEG) && !op1->gtOverflowEx())
     {
@@ -8817,17 +8831,6 @@ GenTree* Compiler::fgOptimizeEqualityComparisonWithConst(GenTreeOp* cmp)
 
         cmp->gtOp1 = op1;
         fgUpdateConstTreeValueNumber(op2);
-    }
-
-    // Canonicalize '(A & pow2) == pow2' -> '(A & pow2) != 0'
-    if (cmp->OperIs(GT_EQ) && op1->OperIs(GT_AND) && op1->gtGetOp2()->IsIntegralConstUnsignedPow2())
-    {
-        if (op1->gtGetOp2()->AsIntConCommon()->IntegralValue() == op2->IntegralValue())
-        {
-            cmp->SetOper(GT_NE, GenTree::PRESERVE_VN);
-            op2->SetIntegralValue(0);
-            fgUpdateConstTreeValueNumber(op2);
-        }
     }
 
     // Here we look for the following tree

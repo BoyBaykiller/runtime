@@ -3337,6 +3337,7 @@ struct GenTreeIntConCommon : public GenTree
     inline ssize_t IconValue() const;
     inline void    SetIconValue(ssize_t val);
     inline INT64   IntegralValue() const;
+    inline UINT64  UnsignedIntegralValue() const;
     inline void    SetIntegralValue(int64_t value);
 
     template <typename T>
@@ -3538,6 +3539,13 @@ inline INT64 GenTreeIntConCommon::IntegralValue() const
 #else
     return OperIs(GT_CNS_LNG) ? LngValue() : (INT64)IconValue();
 #endif // TARGET_64BIT
+}
+
+inline UINT64 GenTreeIntConCommon::UnsignedIntegralValue() const
+{
+    INT64  signExtended = IntegralValue();
+    UINT64 zeroExtended = TypeIs(TYP_LONG) ? signExtended : (uint32_t)signExtended;
+    return zeroExtended;
 }
 
 inline void GenTreeIntConCommon::SetIntegralValue(int64_t value)
