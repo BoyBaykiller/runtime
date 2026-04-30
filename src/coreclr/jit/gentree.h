@@ -3337,7 +3337,6 @@ struct GenTreeIntConCommon : public GenTree
     inline ssize_t IconValue() const;
     inline void    SetIconValue(ssize_t val);
     inline INT64   IntegralValue() const;
-    inline UINT64  UnsignedIntegralValue() const;
     inline void    SetIntegralValue(int64_t value);
 
     template <typename T>
@@ -3539,13 +3538,6 @@ inline INT64 GenTreeIntConCommon::IntegralValue() const
 #else
     return OperIs(GT_CNS_LNG) ? LngValue() : (INT64)IconValue();
 #endif // TARGET_64BIT
-}
-
-inline UINT64 GenTreeIntConCommon::UnsignedIntegralValue() const
-{
-    INT64  signExtended = IntegralValue();
-    UINT64 zeroExtended = TypeIs(TYP_LONG) ? signExtended : (uint32_t)signExtended;
-    return zeroExtended;
 }
 
 inline void GenTreeIntConCommon::SetIntegralValue(int64_t value)
@@ -10453,7 +10445,12 @@ inline bool GenTree::IsIntegralConstPow2() const
 {
     if (IsIntegralConst())
     {
-        return isPow2(AsIntConCommon()->IntegralValue());
+        if (IsCnsIntOrI())
+        {
+            return isPow2((int32_t)AsIntCon()->IconValue());
+        }
+
+        return isPow2(AsLngCon()->LngValue());
     }
 
     return false;
@@ -10476,7 +10473,12 @@ inline bool GenTree::IsIntegralConstUnsignedPow2() const
 {
     if (IsIntegralConst())
     {
-        return isPow2(AsIntConCommon()->UnsignedIntegralValue());
+        if (IsCnsIntOrI())
+        {
+            return isPow2((uint32_t)AsIntCon()->IconValue());
+        }
+
+        return isPow2((uint64_t)AsLngCon()->LngValue());
     }
 
     return false;
@@ -10494,9 +10496,12 @@ inline bool GenTree::IsIntegralConstAbsPow2() const
 {
     if (IsIntegralConst())
     {
-        INT64  svalue = AsIntConCommon()->IntegralValue();
-        size_t value  = (svalue == SSIZE_T_MIN) ? static_cast<size_t>(svalue) : static_cast<size_t>(abs(svalue));
-        return isPow2(value);
+        if (IsCnsIntOrI())
+        {
+            return isPow2Abs((int32_t)AsIntCon()->IconValue());
+        }
+
+        return isPow2Abs(AsLngCon()->LngValue());
     }
 
     return false;
