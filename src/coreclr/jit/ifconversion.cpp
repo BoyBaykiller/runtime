@@ -63,9 +63,10 @@ private:
 
     bool HasElseBlock()
     {
-        // Note: Even when this is false we can have an Else operation
-        // by treating a STORE inside JTRUE block as one
-        return m_startBlock->GetTrueTarget()->GetUniquePred(m_compiler) != nullptr;
+        BasicBlock* falseBb = m_startBlock->GetFalseTarget();
+        BasicBlock* trueBb  = m_startBlock->GetTrueTarget();
+
+        return falseBb->GetUniqueSucc() != trueBb;
     }
 
 public:
@@ -144,11 +145,6 @@ bool OptIfConversionDsc::IfConvertCheckFlow()
 {
     BasicBlock* falseBb = m_startBlock->GetFalseTarget();
     BasicBlock* trueBb  = m_startBlock->GetTrueTarget();
-
-    if (falseBb->GetUniquePred(m_compiler) == nullptr)
-    {
-        return false;
-    }
 
     // The Then/Else blocks will be removed by if-conversion, so they must be in the same
     // EH region as m_startBlock. Otherwise they may be the start of a try/handler region
@@ -587,7 +583,7 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
     GenTree* selectFalseInput;
     if (m_mainOper == GT_STORE_LCL_VAR)
     {
-        selectFalseInput = m_thenOperation.node->AsLclVar()->Data();
+        selectFalseInput = m_compiler->gtCloneExpr(m_thenOperation.node->AsLclVar()->Data());
         if (m_elseOperation.block == nullptr)
         {
             // The code doesn't explicitly express an Else operation, use the unmodified local.
@@ -596,17 +592,15 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
         }
         else
         {
-            selectTrueInput = m_elseOperation.node->AsLclVar()->Data();
+            selectTrueInput = m_compiler->gtCloneExpr(m_elseOperation.node->AsLclVar()->Data());
         }
     }
     else
     {
         assert(m_mainOper == GT_RETURN);
         assert(m_elseOperation.block != nullptr);
-        assert(m_thenOperation.node->TypeGet() == m_elseOperation.node->TypeGet());
-
-        selectTrueInput  = m_elseOperation.node->AsOp()->GetReturnValue();
-        selectFalseInput = m_thenOperation.node->AsOp()->GetReturnValue();
+        selectTrueInput  = m_compiler->gtCloneExpr(m_elseOperation.node->AsOp()->GetReturnValue());
+        selectFalseInput = m_compiler->gtCloneExpr(m_thenOperation.node->AsOp()->GetReturnValue());
     }
 
     GenTree* select = m_compiler->gtNewConditionalNode(GT_SELECT, m_cond, selectTrueInput, selectFalseInput,
@@ -636,31 +630,40 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
         }
     }
 
-#ifdef TARGET_RISCV64
+    // Stop it from generating duplicate epilogues: https://github.com/dotnet/runtime/issues/112392
+    // if (m_mainOper == GT_RETURN)
+    // {
+    //     if ((m_startBlock->GetFalseTarget()->GetUniquePred(m_compiler) == nullptr) ||
+    //     m_startBlock->GetTrueTarget()->GetUniquePred(m_compiler) == nullptr)
+    //     {
+    //         return true;
+    //     }
+    // }
+
     if (select->OperIs(GT_SELECT))
     {
+#ifdef TARGET_RISCV64
         JITDUMP("Skipping if-conversion that could not be optimized to ordinary operations\n");
         return true;
-    }
 #endif
+    }
 
-    // Use the SELECT as the source of the Then STORE/RETURN.
-    m_thenOperation.node->AddAllEffectsFlags(select);
+    // Create Use(SELECT) tree.
+    GenTree* useSelect = nullptr;
     if (m_mainOper == GT_STORE_LCL_VAR)
     {
-        m_thenOperation.node->AsLclVar()->Data() = select;
+        useSelect = m_compiler->gtNewStoreLclVarNode(m_thenOperation.node->AsLclVarCommon()->GetLclNum(), select);
     }
     else
     {
-        m_thenOperation.node->AsOp()->SetReturnValue(select);
+        useSelect = m_compiler->gtNewOperNode(m_mainOper, select->TypeGet(), select);
     }
-    m_compiler->gtSetEvalOrder(m_thenOperation.node);
-    m_compiler->fgSetStmtSeq(m_thenOperation.stmt);
+    useSelect->AddAllEffectsFlags(select);
 
-    // Replace JTRUE with STORE(SELECT)/RETURN(SELECT) statement.
-    m_compiler->fgInsertStmtBefore(m_startBlock, m_startBlock->lastStmt(), m_thenOperation.stmt);
-    m_compiler->fgRemoveStmt(m_startBlock, m_startBlock->lastStmt());
-    m_thenOperation.block->SetFirstStmt(nullptr);
+    // Replace JTRUE with Use(SELECT).
+    m_startBlock->lastStmt()->SetRootNode(useSelect);
+    m_compiler->gtSetEvalOrder(useSelect);
+    m_compiler->fgSetStmtSeq(m_startBlock->lastStmt());
 
     BasicBlock* falseBb = m_startBlock->GetFalseTarget();
     BasicBlock* trueBb  = m_startBlock->GetTrueTarget();
@@ -681,9 +684,20 @@ bool OptIfConversionDsc::optIfConvert(int* pReachabilityBudget)
     assert(m_startBlock->GetUniqueSucc() == m_finalBlock);
 
     auto removeBlock = [&](BasicBlock* block) {
-        block->bbWeight = BB_ZERO_WEIGHT;
-        m_compiler->fgRemoveAllRefPreds(block, m_startBlock);
-        m_compiler->fgRemoveBlock(block, true);
+        FlowEdge* removedEdge = m_compiler->fgRemoveAllRefPreds(block, m_startBlock);
+        if (block->hasProfileWeight() && m_startBlock->hasProfileWeight())
+        {
+            block->decreaseBBProfileWeight(removedEdge->getLikelyWeight());
+            if (block->NumSucc() > 0)
+            {
+                m_compiler->fgPgoConsistent = false;
+            }
+        }
+
+        if (block->bbPreds == nullptr)
+        {
+            m_compiler->fgRemoveBlock(block, true);
+        }
     };
 
     removeBlock(falseBb);
@@ -974,6 +988,11 @@ GenTree* OptIfConversionDsc::TrySelectToCondOpLcl(GenTreeConditional* select)
 //
 PhaseStatus Compiler::optIfConversion()
 {
+    if (verbose)
+    {
+        fgDispBasicBlocks(true);
+    }
+
     if (!opts.OptimizationEnabled())
     {
         return PhaseStatus::MODIFIED_NOTHING;
